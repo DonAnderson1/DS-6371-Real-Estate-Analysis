@@ -1,0 +1,188 @@
+options validvarname=v7;
+FILENAME REFFILE '/home/u36829273/FRANC/train.csv';
+LIBNAME TEAM BASE '/home/u36829273/FRANC';
+
+PROC IMPORT DATAFILE=REFFILE DBMS=CSV OUT=TEAM.TRAIN replace;
+	GETNAMES=YES;
+RUN;
+
+/*Narrowing down to the three
+neighborhoods by creating
+a new dataset train_*/
+data TEAM.train_ replace;
+	set TEAM.TRAIN;
+	where Neighborhood in ('NAmes', 'Edwards', 'BrkSide');
+
+	if _n_="." then
+		call missing(Neighborhood, SalePrice, GrLivArea);
+run;
+
+PROC CONTENTS DATA=TEAM.train_;
+RUN;
+
+/*summary statistics*/
+proc means data=TEAM.train_ n nmiss mean min max std;
+	var GrLivArea SalePrice;
+run;
+ods graphics on;
+proc freq data=TEAM.train_ order=freq nlevels;
+tables Neighborhood SalePrice GrLivArea  / nocum plots=freqplot(orient=horizontal scale=percent);
+run;
+
+/*Exploring the association between SalePrice
+and square footage of the living area(GrLivArea)*/
+proc sgscatter data=TEAM.train_;
+	plot SalePrice*GrLivArea/reg;
+	title "Associations of Above Grade Living Area with Sale Price";
+run;
+
+/*checking outliers*/
+proc univariate data=TEAM.train_;
+	var GrLivArea SalePrice;
+run;
+
+/*removing outliers*/
+
+data TEAM.clean_train replace;
+set TEAM.train_;
+where GrLivArea >672 and GrLivArea<2704;
+where SalePrice>60000 and SalePrice<244000;
+run;
+
+/*One Way ANOVA to find out if there is a difference between the average sale price
+of the homes in the three neighborhoods*/
+proc means data=TEAM.clean_train;
+	var SalePrice;
+	class Neighborhood;
+	title 'Descriptive Statistics of SalePrice by Neighborhood';
+run;
+
+proc sgplot data=TEAM.clean_train;
+	vbox SalePrice  / category=Neighborhood connect=mean;
+	title "Homes' Sale Price Differences across Neighborhoods";
+run;
+
+proc sgplot data=TEAM.clean_train;
+	vbox GrLivArea / category=Neighborhood connect=mean;
+	title "Homes' General living area Size across Neighborhoods";
+run;
+
+
+proc sort data=TEAM.clean_train;
+   by SalePrice;
+run;
+
+/* create multiple plots and label influential points */
+ods graphics on;
+proc reg data=TEAM.clean_train plots(only) = (CooksD(label) DFFits(label) rstudentbyleverage diagnostics(stats=all) ) 
+	press
+	alpha=0.05 tableout outest=TEAM.modeltrain;   
+   model SalePrice=GrLivArea  selection=;
+   Where neighborhood in('NAmes','Edwards','BrkSide');
+   id Id; 
+   output out=RegOut pred=Pred rstudent=RStudent dffits=DFFits cookd=CooksD press=press; /* optional: output statistics */
+run; 
+
+
+
+
+
+
+QUESTION B;
+ods select none;
+proc glmselect data=TEAM.train plots=all;
+	class Neighborhood;
+	STEPWISE: model SalePrice=GrLivArea Neighborhood  / selection=STEPWISE
+	details=steps select=SL slstay=0.05 slentry=0.05;
+	title "Stepwise model selection for saleprice";
+	
+run;
+ods select all;
+
+ods graphics on;
+ods output  rstudentbyleverage=Rstudent
+			cooksdplot=cook
+			dffitsplot=dffits
+			
+			;
+proc reg data=TEAM.clean_train outest=TEAM.estimates
+	plots(only label)=(rstudentbyleverage cooksd dffits dfbetas);
+	model1: model SalePrice=GrLivArea / PRESS ;
+	title "MODEL 1: Model - Plots of Diagnostic Statistics";
+	
+run;
+quit;
+
+
+
+
+
+ods select none;
+proc glmselect data=TEAM.clean_train plots=all;
+	class Neighborhood;
+	BACKWARD: model SalePrice=GrLivArea Neighborhood  / selection=BACKWARD
+	details=steps select=SL slstay=0.05 slentry=0.05;
+	title "Backward model selection for saleprice";
+run;
+ods select all;
+ods graphics on;
+ods output rstudentbypredicted=Rstud
+			cooksdplot=cook
+			dffitsplot=dffits
+			dfbetaspanel=dfbs;
+proc reg data=TEAM.clean_train outest=TEAM.estimates
+	plots(only label)=(rstudentbypredicted cooksd dffits dfbetas );
+	model1: model SalePrice=GrLivArea / PRESS ;
+	title "MODEL 1: Model - Plots of Diagnostic Statistics";
+	
+run;
+quit;
+
+
+ods select none;
+proc glmselect data=TEAM.clean_train plots=all;
+	class Neighborhood;
+	FORWARD: model SalePrice=GrLivArea Neighborhood  / selection=FORWARD
+	details=steps select=SL slstay=0.05 slentry=0.05;
+	title "Forward model selection for saleprice";
+run;
+ods select all;
+
+ods graphics on;
+ods output rstudentbypredicted=Rstud
+			cooksdplot=cook
+			dffitsplot=dffits
+			dfbetaspanel=dfbs;
+proc reg data=TEAM.clean_train outest=TEAM.estimates
+	plots(only label)=(rstudentbypredicted cooksd dffits dfbetas );
+	model1: model SalePrice=GrLivArea / PRESS ;
+	title "MODEL 1: Model - Plots of Diagnostic Statistics";
+	
+run;
+quit;
+
+
+ods select none;
+proc glmselect data=TEAM.clean_train plots=all;
+	class Neighborhood;
+	CUSTOM: model SalePrice=GrLivArea Neighborhood  ;
+	title "Custom model selection for saleprice";
+run;
+ods select all;
+ods graphics on;
+ods output rstudentbypredicted=Rstud
+			cooksdplot=cook
+			dffitsplot=dffits
+			dfbetaspanel=dfbs;
+proc reg data=TEAM.clean_train outest=TEAM.estimates
+	plots(only label)=(rstudentbypredicted cooksd dffits dfbetas);
+	model1: model SalePrice=GrLivArea / PRESS ; 
+	title "MODEL 1: Model - Plots of Diagnostic Statistics";
+	
+run;
+quit;
+
+
+
+
+

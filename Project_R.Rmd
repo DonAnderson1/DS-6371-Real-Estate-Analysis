@@ -1,0 +1,281 @@
+---
+"Don Anderson"
+title: "MSDS 6371 Real Estate Analysis"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+date: "2022-12-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# ANALYSIS 1: Relationship between Ames House Prices & Area, Neighborhood
+## Introduction
+This analysis project is based on data about the housing market. We will build different linear regression models to find any relationship between House Prices and Living Area of the Houses in three different neighborhoods. There are 25 neighborhoods in this dataset. In this analysis we are interseted in following three neighborhoods: NAmes, Edwards and BrkSide. 
+
+## Data Description 
+Data set contains information from the Ames Assessor’s Office used in computing assessed values for individual residential properties sold in Ames, IA from 1872 to 2010. The Ames dataset is available on [kaggle](https://www.kaggle.com/datasets/prevek18/ames-housing-dataset) and the description of the data is available at this [link](http://jse.amstat.org/v19n3/decock/DataDocumentation.txt). The dataset is quite big with 2930 observations and 80 variables. The variable used for this analysis are SalePrice, GrLIvArea and Neighborhood. We will be exploring the relationship between SalePrice and GrLIvArea in following neighborhoods: NAmes, Edwards and BrkSide. The dataset has been partitioned equally at random into training and testing data set . The training set contains 1460 observations and testing set contains 1459 observations.
+
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(car)
+library(leaps)
+library(MASS)
+train <- read.csv('train.csv')
+test <- read.csv('test.csv')
+dim(train)
+dim(train)
+dim(test)
+
+train %>%
+  count(Neighborhood)
+train_set <- train %>% filter(Neighborhood %in% c('NAmes', 'Edwards', 'BrkSide'))
+
+test_set <- test %>% filter(Neighborhood %in% c('NAmes', 'Edwards', 'BrkSide'))
+```
+
+## Analysis Question 1:
+In this analysis we will be doing explanatory data analysis(EDA) and building different regression models to answer the following question: Is there are a relationship between Sale Price of the Ames house and square footage of the living area of the house in the three neighborhoods of NAmes, Edwards and BrkSide?
+
+## Explanatory Data Analysis(EDA)
+We will perform explanatory data analysis to answer the above question. The scatterplot of Sales Price and Living Area suggest a linear positive relationship between these two variables. The boxplot between Sale price and those three neighborhood suggest that NAmes has higher Sale prices compare to other two neighborhoods. The neighborhood BrkSide has lowest Sale price than other two neighborhoods.  The oulier sale prices are visible in all three neighborhoods. The histogram of SalePrice suggest that the distrubtion is slightly right skewed with some extreme sale prices observations.
+```{r}
+p1 <-ggplot(data = train_set, aes(GrLivArea, SalePrice)) +
+  geom_point() 
+
+p2 <- ggplot(data = train_set, aes(GrLivArea, SalePrice, color = Neighborhood)) +
+  geom_point() 
+
+
+p3 <- ggplot(data = train_set, aes(GrLivArea, SalePrice, color = Neighborhood)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = FALSE)
+
+p4 <- ggplot(data = train_set, aes(SalePrice, Neighborhood, fill = Neighborhood)) +
+  geom_boxplot() 
+
+gridExtra::grid.arrange(p1, p2, p3, p4 , nrow = 2, ncol = 2)
+
+ggplot(train_set, aes(SalePrice))+
+  geom_histogram(bins = 50, fill = 'lightyellow', color = 'black') +
+  ggtitle('Distribution of Sale Prices of Ames Houses') 
+```
+
+The coefficient of correlation between sale price and living area is 0.585 which suggest relationship is positive. We will perform cor test see whether this relationship is significant or not. The results from the cor.test are statistically significant which means there is a relationship between sale prices and living area.
+
+```{r}
+cor(train_set$SalePrice, train_set$GrLivArea)
+cor.test(train_set$SalePrice, train_set$GrLivArea)
+```
+
+## Building Linear Regression model
+In our first model we fitted a very simple model between Sale Price and Living area. The coefficient of GrLivArea is statistically significant and ajdusted r-squared is 0.34 which means 34% varibility of SalePrice is explained by GrLivArea. 
+```{r}
+price_fit1 <- lm(SalePrice ~ GrLivArea, data = train_set)
+summary(price_fit1)
+```
+
+In our next model we added those three neighborhoods to see whether they have any impact on the sale prices of the house. From the summary of this model we can see that coefficient of Neighborhood are statistically significant and adjusted r-squared is improved. We will perform anova test to see whether our second model is better fit than first. The results from the anova test are statistically significant which means there is relationship between sale prices and different neighborhoods.
+```{r}
+price_fit2 <- lm(SalePrice ~ GrLivArea + Neighborhood, data = train_set)
+summary(price_fit2)
+anova(price_fit1, price_fit2)
+```
+
+Finally we built a model with an interaction between GrLivArea and Neighborhood see any combined effect of these two variables on sale prices. Summary of the model suggest that interaction has significant effect on sales prices. The adjusted r-squared has improved in our final model to 0.447 which means 44.7% variability of the response SalePrice is explained these two variables. We will perform anova test whether our final model is better than our previous model. The results from the anova test are statistically significant which means our final model with interaction is best fit. 
+```{r}
+price_fit3 <- lm(SalePrice ~ GrLivArea*Neighborhood, data = train_set)
+summary(price_fit3)
+confint(price_fit3)
+```
+
+## Diagnostics
+The fitted vs residuals plot doesn't show any patterns. The residuals looks normally distributed. The studentized residuals vs fitted values suggest there are couple of observations are outliers.
+```{r}
+par(mfrow = c(2, 2))
+plot(price_fit3)
+dev.off()
+```
+
+We have performed ncv Test to check the variance of the residuals. The result of test are significant which means there variance of the residuals are not constant.
+```{r}
+ncvTest(price_fit3)
+```
+
+Finally we performed an outlier test to check the presence of any outliers in the residuals. The results from the test show that the observation 190, 229, 169 and 372 are outliers.
+```{r}
+outlierTest(price_fit3)
+```
+
+There are presence of influential observations. The plot below suggest that the observation 131, 169 and 339 are influential.
+```{r}
+plot(price_fit3, 4)
+
+```
+
+## Conclusion
+We fitted multiple linear regression model to observe the relationship between the Sale Prices of Ames housing and Living Area in three neighborhoods. We have noticed that the relationship between sale prices and living area of the house is significant. The multiple linear regression model was able to explain 44% variability of the sale prices. The sales prices of the housing are related to area and neighborhood. Names have significantly higher Sale prices compare to other 2 neighborhoods. Overall the model was not a good fit. The variance was not constant and there presence of outlier in the residuals and there are couple of influential points.
+
+# ANALYSIS 2: Predictiving Sales Prices of Ames Iowa Houses
+
+## Analysis Question 2
+We will build multiple linear regression models to answer the following question: What are the sales prices of ames houses using different relevant parameters.
+
+## Cleaning Data
+The data set is huge and contains lot missing values for the variables. I'll remove those variable from the data set first.
+```{r}
+train <- train %>%
+  select_if(~ !any(is.na(.)))
+```
+
+## Forward Selection Model
+Our first model is forward selection model using regsubests method. We will choose the best model based on Bayesian information criterion(BIC). The model with lowest BIC value will be the best model here. Our model based on forward subset selection method contains 18 predictors. Adjusted r-squared value of the model is 0.8226 which is pretty good which means 82% variability of the Sale Price is explained by this model.  
+```{r, warning=FALSE}
+set.seed(123)
+forward_model <- regsubsets(SalePrice ~ ., data = train, nvmax = 20, method = "forward")
+
+plot(summary(forward_model)$bic, xlab="Number of Var.", ylab = "BIC")
+coef(forward_model, which.min(summary(forward_model)$bic))
+
+fit_forward <- lm(SalePrice ~ MSSubClass + LotArea + LotShape + Neighborhood + 
+                    Condition1 + Condition2 + BldgType + OverallQual +
+                    OverallCond + YearBuilt + RoofMatl + Exterior2nd + BsmtFinSF2 +
+                    FullBath + FullBath + KitchenQual + PavedDrive + SaleCondition, 
+                  data = train)
+
+summary(fit_forward)
+confint(fit_forward)
+Forward_Adjusted_R2 <- 0.812
+```
+
+## Diagnostics of Selection Model
+The diagnostics of this model shows that residuals are normally distributed. The ncv test results show that variance is not constant. VIF suggest that multicolinearity is present in the model. The outlier test shows that there are some observations that are outliers. The observation 524, 826 and 1183 are highly influential in this model. So our model is not a good fit and needs improvement.
+```{r}
+par(mfrow = c(2, 2))
+plot(fit_forward)
+dev.off()
+```
+
+```{r}
+ncvTest(fit_forward)
+
+vif(fit_forward) 
+outlierTest(fit_forward)
+
+plot(fit_forward, 4)
+```
+
+## Backward Elimination Model
+We have built this model using backward Elimination technique using regsubsets function. The predictors are chosen for the final model based on Bayesian information criterion(BIC). Based on lowest BIC value the final model contains 13 predictors. The Adjusted r-squared of this model is 0.786 which is good but slightly lower than our previous model. 
+```{r, warning=FALSE}
+set.seed(123)
+backward_model <- regsubsets(SalePrice ~ ., data = train, nvmax = 20, method = "backward")
+plot(summary(backward_model)$bic, xlab="Number of Var.", ylab = "BIC")
+coef(backward_model, which.min(summary(backward_model)$bic))
+
+fit_backward <- lm(SalePrice ~ LotArea + Neighborhood + Condition2 + OverallQual + RoofMatl + 
+                    OverallCond + YearBuilt + BsmtFinSF2 +LowQualFinSF+
+                  BsmtFullBath + KitchenQual + Functional + SaleCondition, data  = train)
+summary(fit_backward)
+confint(fit_backward)
+Backward_Adjusted_R2 <- 0.7865
+```
+
+## Diagnostics
+The residuals looks normal and there is no obvious pattern in residuals vs fitted plot. The variance of the residuals is not constant based on the results of ncvTest. The variance inflation factor suggest Neighborhood shows multicolinearity. The outliear test shows that there couple of observations that are outlirers. The observation 524, 692 and 826 are influentials. So we need further imporvements to our model to get better predictions.
+```{r}
+par(mfrow = c(2, 2))
+plot(fit_backward)
+dev.off()
+```
+
+```{r}
+ncvTest(fit_backward)
+
+vif(fit_backward) 
+outlierTest(fit_backward)
+
+plot(fit_backward, 4)
+```
+
+
+## Best Subset Model
+We build this model using best subset selction method using regsubsets. The best coefficients based on lowest BIC values are extranted. The final best model contains 18 vairables. The model performs better than previous model with adjusted r-squared value of 0.8171. 
+```{r, warning=FALSE}
+set.seed(123)
+best_model <- regsubsets(SalePrice ~ . , data = train, nvmax = 20, method = "seqrep")
+
+plot(summary(best_model)$bic, xlab="Number of Var.", ylab = "BIC")
+coef(best_model, which.min(summary(best_model)$bic))
+
+fit_best <- lm(SalePrice ~ MSSubClass + LotArea + LotShape + Neighborhood + Condition1 +
+                 Condition2 + BldgType + OverallQual + OverallCond + YearBuilt +
+                 RoofMatl + Exterior2nd + BsmtFinSF2 + FullBath + HalfBath +
+                 KitchenQual + PavedDrive + SaleCondition, data = train)
+summary(fit_best)
+confint(fit_best)
+
+best_Ajdusted_R2 <- 0.817
+```
+
+## Diagnostics
+The residuals looks normal and there are presence of outliers and some influential points. So this model can further be improved. 
+```{r}
+par(mfrow = c(2, 2))
+plot(fit_best)
+dev.off()
+```
+
+```{r}
+ncvTest(fit_best)
+
+vif(fit_best) 
+outlierTest(fit_best)
+
+plot(fit_best, 4)
+```
+
+## Custom Model
+Finally we built out last custom model. I chose following 10 predictors for this custom model: OverallCond, YearBuilt, YearRemodAdd, BedroomAbvGr, GrLivArea, KitchenAbvGr, TotRmsAbvGrd, GarageCars, PoolArea and LotArea. The summary of this model shows that this performed the worst compare to other models with adjusted r-squared value of 0.737.
+
+```{r}
+custom_fit <- lm(SalePrice ~ OverallCond + YearBuilt + YearRemodAdd + BedroomAbvGr + GrLivArea + KitchenAbvGr + TotRmsAbvGrd + GarageCars + PoolArea + LotArea, data = train)
+
+summary(custom_fit)
+confint(custom_fit)
+custom_Ajdsuted_R2 <- 0.737
+```
+
+
+## Diagnostics
+Diagnostic plots suggest that residuals are normally distributed. There are nvc test suggest that variance is not constant. There are dozens of observations that are ouliers. There are some influential observations that should be taking care of to improve the model performance.
+```{r}
+par(mfrow = c(2, 2))
+plot(custom_fit)
+dev.off()
+```
+
+```{r}
+ncvTest(custom_fit)
+
+vif(custom_fit) 
+outlierTest(custom_fit)
+
+plot(custom_fit, 4)
+```
+
+## Comaring Results
+Finally we compared the results from each model. The table below suggests that the stepwise  best subset model resulted with highest adjusted r-squared value of 0.817. The forward model results are pretty close to best subset model with adjusted r-squared value of 0.812. The custom model with 10 predictors performed the worst here. 
+```{r}
+data.frame(`Adjusted R2` = c(custom_Ajdsuted_R2, best_Ajdusted_R2, Backward_Adjusted_R2, Forward_Adjusted_R2), 
+           row.names = c('Custom', 'Stepwise', 'Backward', 'Forward')) %>%
+  knitr::kable()
+
+```
+
+## Conclusion
+We fitted 4 multiple linear regression models. The results suggested that the best subset model performed the best with highest adjuseted r-squared value. The custom model performed the worst with lowest r-squared value. Overall some of the assumptions for our models was fulfilled. There were outliers in the residuals and variance of the residuals were not constant. There were presence of influential observatoins and multi-colinearity. So our models need further improvement to predict the Sale Prices of Ames houses. 
